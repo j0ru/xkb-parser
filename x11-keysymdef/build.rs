@@ -56,65 +56,74 @@ fn from_json() {
     writeln!(&mut file, "::lazy_static::lazy_static! {{").unwrap();
 
     // First map: Index by name
-    writeln!(
-        &mut file,
-        "static ref BY_NAMES: ::std::collections::HashMap<&'static str, &'static Record> = {{"
-    )
-    .unwrap();
-    writeln!(&mut file, "let mut map = ::std::collections::HashMap::new();").unwrap();
-    for (index, r) in records.iter().enumerate() {
-        // multiple names per record possible, add one entry for each
-        for name in &r.names {
-            // Use unchecked access here because we just built the array of records
-            // with exactly these indices.
+    #[cfg(feature = "by_name")]
+    {
+        writeln!(
+            &mut file,
+            "static ref BY_NAMES: ::std::collections::HashMap<&'static str, &'static Record> = {{"
+        )
+        .unwrap();
+        writeln!(&mut file, "::std::collections::HashMap::from([").unwrap();
+        for (index, r) in records.iter().enumerate() {
+            // multiple names per record possible, add one entry for each
+            for name in &r.names {
+                // Use unchecked access here because we just built the array of records
+                // with exactly these indices.
+                writeln!(
+                    &mut file,
+                    r#"("{}", unsafe {{ RECORDS.get_unchecked({}) }}),"#,
+                    name, index
+                )
+                .unwrap();
+            }
+        }
+        writeln!(&mut file, "])").unwrap();
+        writeln!(&mut file, "}};").unwrap();
+    }
+
+    // Next up: Index by codepoint
+    #[cfg(feature = "by_codepoint")]
+    {
+        writeln!(
+            &mut file,
+            "static ref BY_CODEPOINT: std::collections::HashMap<char, &'static Record> = {{"
+        )
+        .unwrap();
+        writeln!(&mut file, "std::collections::HashMap::from([").unwrap();
+
+        for (index, r) in records.iter().enumerate() {
             writeln!(
                 &mut file,
-                r#"map.entry("{}").or_insert(unsafe {{ RECORDS.get_unchecked({}) }});"#,
-                name, index
+                r#"('\u{{{:x}}}', unsafe {{ RECORDS.get_unchecked({}) }}),"#,
+                r.unicode, index
             )
             .unwrap();
         }
+        writeln!(&mut file, "])").unwrap();
+        writeln!(&mut file, "}};").unwrap();
     }
-    writeln!(&mut file, "map").unwrap();
-    writeln!(&mut file, "}};").unwrap();
-
-    // Next up: Index by codepoint
-    writeln!(
-        &mut file,
-        "static ref BY_CODEPOINT: std::collections::HashMap<char, &'static Record> = {{"
-    )
-    .unwrap();
-    writeln!(&mut file, "let mut map = std::collections::HashMap::new();").unwrap();
-
-    for (index, r) in records.iter().enumerate() {
-        writeln!(
-            &mut file,
-            r#"map.entry('\u{{{:x}}}').or_insert(unsafe {{ RECORDS.get_unchecked({}) }});"#,
-            r.unicode, index
-        )
-        .unwrap();
-    }
-    writeln!(&mut file, "map").unwrap();
-    writeln!(&mut file, "}};").unwrap();
 
     // Last but not least: Index by keysym
-    writeln!(
-        &mut file,
-        "static ref BY_KEYSYM: std::collections::HashMap<u32, &'static Record> = {{"
-    )
-    .unwrap();
-    writeln!(&mut file, "let mut map = std::collections::HashMap::new();").unwrap();
-
-    for (index, r) in records.iter().enumerate() {
+    #[cfg(feature = "by_keysym")]
+    {
         writeln!(
             &mut file,
-            r#"map.entry({}).or_insert(unsafe {{ RECORDS.get_unchecked({}) }});"#,
-            r.keysym, index
+            "static ref BY_KEYSYM: std::collections::HashMap<u32, &'static Record> = {{"
         )
         .unwrap();
+        writeln!(&mut file, "std::collections::HashMap::from([").unwrap();
+
+        for (index, r) in records.iter().enumerate() {
+            writeln!(
+                &mut file,
+                r#"({}, unsafe {{ RECORDS.get_unchecked({}) }}),"#,
+                r.keysym, index
+            )
+            .unwrap();
+        }
+        writeln!(&mut file, "])").unwrap();
+        writeln!(&mut file, "}};").unwrap();
     }
-    writeln!(&mut file, "map").unwrap();
-    writeln!(&mut file, "}};").unwrap();
 
     // End of lazy_static
     writeln!(&mut file, "}}").unwrap();
